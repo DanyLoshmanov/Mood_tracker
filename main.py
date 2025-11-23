@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import date ,datetime, timedelta as dt
+from datetime import date ,datetime, timedelta
 
 DATA_FILE = os.path.join(os.getcwd(), 'mood.json')
 DATA_FMT = '%Y-%m-%d'
@@ -31,6 +31,24 @@ def add_mood():
     today = date.today().strftime(DATA_FMT)
     data = load_data()
 
-    print("Введите цифру вашего настроения: ")
+    print("Выбери настроение:  ")
     for key, value in MOODS.items():
         print(f"{key}. {value}")
+
+    while True:
+        try:
+            mood_key = int(input("Введите номер: "))
+            if mood_key in MOODS:
+                break
+        except ValueError:
+            pass
+        print("Некорректный выбор!")
+
+    note = input("Короткая заметка (Можно оставить пустой): ").strip()
+
+    data[today] = {
+        "mood": MOODS[mood_key],
+        "note": note
+    }
+    save_data(data)
+    print("Настроение сохранено!")
