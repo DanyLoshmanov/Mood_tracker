@@ -1,164 +1,171 @@
 import json
 import os
-from datetime import date ,datetime, timedelta
+from datetime import date
 
-DATA_FILE = os.path.join(os.getcwd(), 'mood.json')
-DATA_FMT = '%Y-%m-%d'
+
+DATA_FILE = os.path.join(os.getcwd(), "mood.json")
+DATE_FMT = "%Y-%m-%d"
 
 MOODS = {
-    1: 'Очень плохо',
-    2: 'Плохо',
-    3: 'Нормально',
-    4: 'Хорошо',
-    5: 'Отлично'
+    1: "Очень плохо",
+    2: "Плохо",
+    3: "Нормально",
+    4: "Хорошо",
+    5: "Отлично"
 }
 
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        print("Невозможно найти файл!")
-        return {}
-    try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.loads(f.read())
-    except FileNotFoundError:
-        return {}
+# ------------------------------------------------------
+# Модель одной записи настроения
+# ------------------------------------------------------
+class MoodEntry:
+    def __init__(self, mood, note=""):
+        self.mood = mood
+        self.note = note.strip()
 
-def save_data(data):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    def to_dict(self):
+        return {
+            "mood": self.mood,
+            "note": self.note
+        }
 
-def add_mood():
-    today = date.today().strftime(DATA_FMT)
-    data = load_data()
+    @classmethod
+    def from_dict(cls, d):
+        return cls(d["mood"], d.get("note", ""))
 
-    print("Выбери настроение:  ")
-    for key, value in MOODS.items():
-        print(f"{key}. {value}")
 
-    while True:
+# ------------------------------------------------------
+# Репозиторий — чтение/запись mood.json
+# ------------------------------------------------------
+class MoodRepository:
+    def __init__(self, file_path=DATA_FILE):
+        self.file_path = file_path
+
+    def load(self):
+        if not os.path.exists(self.file_path):
+            return {}
+
         try:
-            mood_key = int(input("Введите номер: "))
-            if mood_key in MOODS:
-                break
-        except ValueError:
-            pass
-        print("Некорректный выбор!")
+            with open(self.file_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+                data = {}
+                for d, info in raw.items():
+                    data[d] = MoodEntry.from_dict(info)
+                return data
+        except (json.JSONDecodeError, FileNotFoundError):
+            return {}
 
-    note = input("Короткая заметка (Можно оставить пустой): ").strip()
+    def save(self, data: dict):
+        raw = {d: entry.to_dict() for d, entry in data.items()}
 
-    data[today] = {
-        "mood": MOODS[mood_key],
-        "note": note
-    }
-    save_data(data)
-    print("Настроение сохранено!")
+        with open(self.file_path, "w", encoding="utf-8") as f:
+            json.dump(raw, f, ensure_ascii=False, indent=4)
 
-def view_day():
-    d = input("Введите дату (YYYY-MM-DD). Пусто = сегодня: ").strip()
-    if not d:
-        d = date.today().strftime(DATA_FMT)
 
-        data = load_data()
+# ------------------------------------------------------
+# Логика приложения
+# ------------------------------------------------------
+class MoodTracker:
+    def __init__(self, repo: MoodRepository):
+        self.repo = repo
+
+    def add_mood(self):
+        today = date.today().strftime(DATE_FMT)
+        data = self.repo.load()
+
+        print("Выбери настроение:")
+        for key, value in MOODS.items():
+            print(f"{key}. {value}")
+
+        while True:
+            try:
+                key = int(input("Введите номер: "))
+                if key in MOODS:
+                    break
+            except ValueError:
+                pass
+            print("Некорректный выбор!")
+
+        note = input("Заметка (можно пусто): ").strip()
+        entry = MoodEntry(MOODS[key], note)
+
+        data[today] = entry
+        self.repo.save(data)
+
+        print("Настроение сохранено.")
+
+    def view_day(self):
+        d = input("Введите дату (YYYY-MM-DD). Пусто = сегодня: ").strip()
+        if not d:
+            d = date.today().strftime(DATE_FMT)
+
+        data = self.repo.load()
 
         if d not in data:
-            print("Данных за этот день нет!")
+            print("Нет данных за эту дату.")
             return
 
+        entry = data[d]
         print(f"Дата: {d}")
-        print(f"Настроение: {data[d]['mood']}")
-        print(f"Заметка: {data[d]['note']}")
+        print(f"Настроение: {entry.mood}")
+        print(f"Заметка: {entry.note}")
 
-def show_all():
-    data = load_data()
+    def show_all(self):
+        data = self.repo.load()
 
-    if not data:
-        print("Записей пока нет.")
-        return
+        if not data:
+            print("Записей пока нет.")
+            return
 
-    for d, info in sorted(data.items()):
-        print(f"{d}: {info['mood']} — {info['note']}")
+        for d, entry in sorted(data.items()):
+            print(f"{d}: {entry.mood} — {entry.note}")
+
+    def delete_mood(self):
+        d = input("Введите дату для удаления (YYYY-MM-DD). Пусто = сегодня: ").strip()
+        if not d:
+            d = date.today().strftime(DATE_FMT)
+
+        data = self.repo.load()
+
+        if d not in data:
+            print("Нет записи за эту дату.")
+            return
+
+        entry = data[d]
+        print(f"Запись найдена: {entry.mood} — {entry.note}")
+
+        confirm = input("Удалить? (y/n): ").strip().lower()
+        if confirm == "y":
+            del data[d]
+            self.repo.save(data)
+            print("Запись удалена.")
+        else:
+            print("Удаление отменено.")
 
 
-def delete_mood():
-    data = load_data()
+# ------------------------------------------------------
+# Пример запуска
+# ------------------------------------------------------
+if __name__ == "__main__":
+    repo = MoodRepository()
+    tracker = MoodTracker(repo)
 
-    d = input("Введите дату для удаления (YYYY-MM-DD). Пусто = сегодня: ").strip()
-    if not d:
-        d = date.today().strftime(DATA_FMT)
-
-    if d not in data:
-        print("Нет записи за эту дату.")
-        return
-
-    print(f"Найдено настроение за {d}: {data[d]['mood']} — {data[d]['note']}")
-    confirm = input("Удалить? (y/n): ").strip().lower()
-
-    if confirm == "y":
-        del data[d]
-        save_data(data)
-        print("Запись удалена.")
-    else:
-        print("Удаление отменено.")
-
-
-def stats(days: int=30):
-    data = load_data()
-    end = date.today()
-    start = end - timedelta(days=days - 1)
-
-    counter = {0 for mood in MOODS.values()}
-
-    for i in range(days):
-        d = (start + timedelta(days=i)).strftime(DATA_FMT)
-        if d in data:
-            counter[data[d]['mood']] += 1
-
-    print(f"Статистика за {days} дней: ")
-    for mood, count in counter:
-        print(f"{mood}: {count}")
-
-def calendar_view(days: int=30):
-    data = load_data()
-    end = date.today()
-    start = end - timedelta(days=days - 1)
-
-    print(f"Календарь за {days} дней: ")
-    print("Формат: YYYY-MM-DD — Настроение")
-
-    for i in range(days):
-        d = (start + timedelta(days=i)).strftime(DATA_FMT)
-        mood = data.get(d, {}).get("mood", "-")
-        print(f"{d} — {mood}")
-
-def main():
     while True:
-        print("\nМеню:")
-        print("1. Добавить настроение")
-        print("2. Показать настроение за день")
-        print("3. Статистика за 7 дней")
-        print("4. Статистика за 30 дней")
-        print("5. Показать все записи")
-        print("6. Удалить запись настроения")
-        print("0. Выход")
+        print("\n1. Добавить настроение")
+        print("2. Посмотреть за день")
+        print("3. Показать все записи")
+        print("4. Удалить запись")
+        print("5. Выход")
 
-        choice = input("Ваш выбор: ").strip()
-
+        choice = input("Выбор: ").strip()
         if choice == "1":
-            add_mood()
+            tracker.add_mood()
         elif choice == "2":
-            view_day()
+            tracker.view_day()
         elif choice == "3":
-            stats(7)
+            tracker.show_all()
         elif choice == "4":
-            stats(30)
+            tracker.delete_mood()
         elif choice == "5":
-            show_all()
-        elif choice == "6":
-            delete_mood()
-        elif choice == "0":
             break
         else:
             print("Некорректный ввод.")
-
-if __name__ == "__main__":
-    main()
