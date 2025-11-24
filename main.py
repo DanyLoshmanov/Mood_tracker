@@ -52,3 +52,34 @@ def add_mood():
     }
     save_data(data)
     print("Настроение сохранено!")
+
+def view_day():
+    d = input("Введите дату (YYYY-MM-DD). Пусто = сегодня: ").strip()
+    if not d:
+        d = date.today().strftime(DATA_FMT)
+
+        data = load_data()
+
+        if d not in data:
+            print("Данных за этот день нет!")
+            return
+
+        print(f"Дата: {d}")
+        print(f"Настроение: {data[d]['mood']}")
+        print(f"Заметка: {data[d]['note']}")
+
+def stats(days: int=30):
+    data = load_data()
+    end = date.today()
+    start = end - timedelta(days=days - 1)
+
+    counter = {0 for mood in MOODS.values()}
+
+    for i in range(days):
+        d = (start + timedelta(days=i)).strftime(DATA_FMT)
+        if d in data:
+            counter[data[d]['mood']] += 1
+
+    print(f"Статистика за {days} дней: ")
+    for mood, count in counter:
+        print(f"{mood}: {count}")
